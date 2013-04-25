@@ -351,6 +351,7 @@ public class Camera
 
 	private double dof = 8;
 	private double fov = projector.getDefaultFoV();
+	private double forwardDisplacement = 0;
 
 	/**
 	 * Maximum diagonal width of the world
@@ -391,6 +392,7 @@ public class Camera
 		focalOffset = other.focalOffset;
 		infDof = other.infDof;
 		worldWidth = other.worldWidth;
+		forwardDisplacement = other.forwardDisplacement;
 		initProjector();
 		updateTransform();
 	}
@@ -411,6 +413,7 @@ public class Camera
 		camera.addItem("dof", new DoubleTag(dof));
 		camera.addItem("infDof", new ByteTag(infDof ? 1 : 0));
 		camera.addItem("focalOffset", new DoubleTag(focalOffset));
+		camera.addItem("forwardDisplacement", new DoubleTag(forwardDisplacement) );
 		return camera;
 	}
 
@@ -434,6 +437,7 @@ public class Camera
 			projectionMode = tag.get("parallel").byteValue() != 0 ? ProjectionMode.PARALLEL : ProjectionMode.PINHOLE;
 		}
 		infDof = tag.get("infDof").byteValue() != 0;
+		forwardDisplacement = tag.get("forwardDisplacement").doubleValue();
 		initProjector();
 		updateTransform();
 	}
@@ -442,6 +446,14 @@ public class Camera
 		return infDof ? p : new ApertureProjector(p, focalOffset/dof, focalOffset);
 	}
 	
+	private Projector applyForwardDisplacement( Projector p ) {
+		return forwardDisplacement == 0 ? p : new ForwardDisplacementProjector(p, forwardDisplacement);
+	}
+	
+	private Projector applyEffects( Projector p ) {
+		return applyForwardDisplacement(applyDoF(p));
+	}
+
 	/**
 	 * Creates, but does not otherwise use, a projector object
 	 * based on the current camera settings. 
@@ -449,18 +461,18 @@ public class Camera
 	private Projector createProjector() {
 		switch (projectionMode) {
 		case PARALLEL:
-			return new ForwardDisplacementProjector( applyDoF( new ParallelProjector( worldWidth, fov ) ), -worldWidth );
+			return applyEffects( new ParallelProjector( worldWidth, fov ) );
 		case PINHOLE:
-			return applyDoF( new PinholeProjector(fov) );
+			return applyEffects( new PinholeProjector(fov) );
 		case FISHEYE:
-			return applyDoF( new FisheyeProjector(fov) );
+			return applyEffects( new FisheyeProjector(fov) );
 		case PANORAMIC_SLOT:
-			return applyDoF( new PanoramicSlotProjector(fov) );
+			return applyEffects( new PanoramicSlotProjector(fov) );
 		case PANORAMIC:
-			return applyDoF( new PanoramicProjector(fov) );
+			return applyEffects( new PanoramicProjector(fov) );
 		default:
 			System.err.println("Error: Undefined projection mode: "+projectionMode+", defaulting to planar");
-			return applyDoF( new PinholeProjector(fov) );
+			return applyEffects( new PinholeProjector(fov) );
 		}
 	}
 
@@ -564,6 +576,22 @@ public class Camera
 	 */
 	public double getFocalOffset() {
 		return focalOffset;
+	}
+	
+	/**
+	 * Set displacement from camera center along trajectory at which to start rays
+	 * @param value
+	 */
+	public void setForwardDisplacement(double value) {
+		forwardDisplacement = value;
+		scene.refresh();
+	}
+
+	/**
+	 * @return displacement from camera center along trajectory at which to start rays
+	 */
+	public double getForwardDisplacement() {
+		return forwardDisplacement;
 	}
 
 	/**
